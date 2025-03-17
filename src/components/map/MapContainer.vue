@@ -42,6 +42,7 @@ export default {
     const mapInstance = ref(null);
     const mapFactory = ref(null);
     const markers = ref([]);
+    const navigationStationMarkers = ref([]);
     const currentCircle = ref(null);
     const ubikeService = new UbikeService();
     const navigationService = new NavigationService();
@@ -84,6 +85,9 @@ export default {
       // 清理導航資源
       navigationService.reset();
       
+      // 清除導航過程中的站點標記
+      clearNavigationStationMarkers();
+      
       // 返回地圖初始狀態
       if (mapInstance.value) {
         mapInstance.value.setCenter([121.5654, 25.0330]);
@@ -94,6 +98,11 @@ export default {
     // 開始模擬
     const startSimulation = () => {
       navigationService.startSimulation();
+      
+      // 初始顯示視野範圍內的站點
+      setTimeout(() => {
+        updateViewportStations();
+      }, 2000); // 等待初始飛行動畫完成
     };
     
     // 切換暫停/繼續模擬
@@ -113,6 +122,84 @@ export default {
       if (navigationService.startPoint && navigationService.endPoint) {
         navigationService.recalculateRoute();
       }
+    };
+    
+    // 更新視野範圍內的站點
+    const updateViewportStations = () => {
+      // 只在導航模式下執行
+      if (!navigationActive.value || !navigationService.simulationActive) {
+        return;
+      }
+      
+      // 清除之前的站點標記
+      clearNavigationStationMarkers();
+      
+      // 查找視野範圍內的站點
+      const viewportStations = navigationService.findStationsInViewport(
+        ubikeService.stations,
+        mapInstance.value.getMapInstance()
+      );
+      
+      // 添加站點標記
+      addNavigationStationMarkers(viewportStations);
+    };
+    
+    // 清除導航過程中的站點標記
+    const clearNavigationStationMarkers = () => {
+      navigationStationMarkers.value.forEach(marker => marker.remove());
+      navigationStationMarkers.value = [];
+    };
+    
+    // 添加導航過程中的站點標記
+    const addNavigationStationMarkers = (stations) => {
+      stations.forEach(station => {
+        try {
+          const stationLat = parseFloat(station.lat);
+          const stationLng = parseFloat(station.lng);
+          
+          if (isNaN(stationLat) || isNaN(stationLng)) {
+            return;
+          }
+          
+          const sbi = parseInt(station.sbi || 0);
+          const tot = parseInt(station.tot || 0);
+          
+          // 根據可借用車輛百分比決定顏色
+          const bikeAvailability = tot > 0 ? (sbi / tot * 100) : 0;
+          let markerColor = '#AAAAAA'; // 預設灰色（普通）
+          
+          if (bikeAvailability < 20) {
+            markerColor = '#FF0000'; // 紅色 - 很難借到車
+          } else if (bikeAvailability < 40) {
+            markerColor = '#FF7F7F'; // 淺紅色 - 較難借到車
+          } else if (bikeAvailability > 70) {
+            markerColor = '#00AA00'; // 綠色 - 很容易借到車
+          } else if (bikeAvailability > 50) {
+            markerColor = '#7FFF7F'; // 淺綠色 - 比較容易借到車
+          }
+          
+          // 創建自定義 Ubike 站點標記元素
+          const ubikeMarkerElement = document.createElement('div');
+          ubikeMarkerElement.className = 'ubike-marker';
+          ubikeMarkerElement.style.backgroundColor = markerColor;
+          ubikeMarkerElement.innerHTML = `<div class="ubike-icon">U</div>`;
+          
+          const marker = mapFactory.value.createMarker([stationLng, stationLat], {
+            element: ubikeMarkerElement,
+            data: station
+          });
+          
+          // 綁定事件
+          marker.on('mouseenter', () => showStationInfo(marker));
+          marker.on('mouseleave', hideStationInfo);
+          
+          // 添加到地圖
+          marker.addTo(mapInstance.value);
+          navigationStationMarkers.value.push(marker);
+        } catch (error) {
+          console.error('Failed to add navigation station marker:', error);
+        }
+      });
     };
     
     // 清除所有標記
@@ -350,6 +437,11 @@ export default {
             }
           });
           
+          navigationService.on('mapMoveEnd', () => {
+            // 更新視野範圍內的站點
+            updateViewportStations();
+          });
+          
           // 加載站點資料
           await ubikeService.fetchStations();
           
@@ -373,6 +465,7 @@ export default {
     // 釋放資源
     onBeforeUnmount(() => {
       clearMarkers();
+      clearNavigationStationMarkers();
       if (currentCircle.value) {
         currentCircle.value.remove();
       }
@@ -394,6 +487,7 @@ export default {
       togglePauseResume,
       handleSpeedChange,
       handlePointsChange,
+      updateViewportStations,
       navControl
     };
   }
