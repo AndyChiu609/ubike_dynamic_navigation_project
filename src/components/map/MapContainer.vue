@@ -170,11 +170,14 @@ export default {
         // 初始化地圖
         mapFactory.value = new MapboxFactory(mapboxgl.accessToken);
         mapInstance.value = mapFactory.value.createMap('map', {
-          center: [121.5654, 25.0330],
-          zoom: 12,
-          style: 'mapbox://styles/mapbox/streets-v12'
+        center: [121.5654, 25.0330],
+        zoom: 12,
+        useLocalTiles: true,  // 啟用本地 tile 服務
+        tileServerUrl: 'http://localhost:8082/data/zoom12-18',  // 不需要加 .json 後綴
+        minZoom: 12,
+        maxZoom: 18
         });
-        
+                
         // 初始化服務
         stationManager = new StationManager(mapFactory.value, ubikeService);
         searchManager = new SearchManager(mapFactory.value, ubikeService, stationManager);
