@@ -1,3 +1,4 @@
+// src/components/map/MapContainer.vue
 <template>
   <div>
     <div id="map" class="map-container"></div>
@@ -8,22 +9,11 @@
       <p><small>若要使用導航功能，請點擊右上角的「開始導航模式」按鈕</small></p>
     </div>
     <div id="loading" v-if="loading">載入中...</div>
-    <div id="station-info" class="station-info" ref="stationInfo" :style="stationInfoStyle">
-      <div v-if="selectedStation">
-        <h4>{{ getStationName(selectedStation) }}</h4>
-        <p>地址: {{ selectedStation.ar }}</p>
-        <p :class="selectedStation.sbi > 0 ? 'bike-available' : 'bike-unavailable'">
-          可借車輛: {{ selectedStation.sbi }} / {{ selectedStation.tot }}
-        </p>
-        <p>可還空位: {{ selectedStation.bemp }}</p>
-      </div>
-    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue';
-// import { useStore } from 'vuex';
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import mapboxgl from 'mapbox-gl';
 import MapboxFactory from '@/services/map/MapboxFactory';
 import UbikeService from '@/services/ubike/UbikeService';
@@ -31,7 +21,6 @@ import UbikeService from '@/services/ubike/UbikeService';
 export default {
   name: 'MapContainer',
   setup() {
-    // const store = useStore();
     const loading = ref(true);
     const stationsInView = ref([]);
     const mapInstance = ref(null);
@@ -39,13 +28,7 @@ export default {
     const markers = ref([]);
     const currentCircle = ref(null);
     const ubikeService = new UbikeService();
-    const selectedStation = ref(null);
-    const stationInfo = ref(null);
-    const stationInfoStyle = ref({
-      display: 'none',
-      left: '0px',
-      top: '0px'
-    });
+    const selectedInfoWindow = ref(null);
     
     // 設置 mapbox token
     mapboxgl.accessToken = 'pk.eyJ1IjoiYW5keWNoaXU2MDkiLCJhIjoiY20xaWxjemc1MGVoZzJqb2NyZ2M2enE1aSJ9.PBoFruvUCgE-xt0MbTYmkg';
@@ -58,71 +41,106 @@ export default {
 
     // 清除所有標記
     const clearMarkers = () => {
+      console.log(`Clearing ${markers.value.length} markers`);
       markers.value.forEach(marker => marker.remove());
       markers.value = [];
     };
     
-    // 獲取站點名稱 (移除前綴)
-    const getStationName = (station) => {
-      return station.sna ? station.sna.replace('YouBike2.0_', '') : '';
-    };
-    
     // 顯示站點信息
-    const showStationInfo = (marker, event) => {
+    const showStationInfo = (marker) => {
       const station = marker.getData();
-      if (!station) return;
+      if (!station) {
+        console.warn('No station data available for marker');
+        return;
+      }
       
-      selectedStation.value = station;
+      console.log('Showing station info:', station.sna);
       
-      // 設置位置
-      stationInfoStyle.value = {
-        display: 'block',
-        left: `${event.pageX + 15}px`,
-        top: `${event.pageY - 20}px`
-      };
+      // 如果已經有信息窗口，先移除
+      if (selectedInfoWindow.value) {
+        selectedInfoWindow.value.remove();
+      }
+      
+      // 創建新的自定義信息窗口
+      selectedInfoWindow.value = mapFactory.value.createInfoWindow({
+        offset: { x: 0, y: -15 }
+      });
+      
+      // 設置信息窗口內容和位置
+      selectedInfoWindow.value.setStationInfo(station);
+      selectedInfoWindow.value.setLngLat(marker.getLngLat());
+      selectedInfoWindow.value.addTo(mapInstance.value);
     };
     
     // 隱藏站點信息
     const hideStationInfo = () => {
-      stationInfoStyle.value.display = 'none';
+      if (selectedInfoWindow.value) {
+        selectedInfoWindow.value.remove();
+        selectedInfoWindow.value = null;
+      }
     };
     
-    onMounted(async () => {
-      try {
-        // 初始化地圖
-        mapFactory.value = new MapboxFactory(mapboxgl.accessToken);
-        mapInstance.value = mapFactory.value.createMap('map', {
-          center: [121.5654, 25.0330],
-          zoom: 12,
-          style: 'mapbox://styles/mapbox/streets-v12'
-        });
-        
-        // 等待地圖載入
-        mapInstance.value.on('load', async () => {
-          console.log('地圖載入完成');
+    // 添加 UBike 站點標記
+    const addStationMarkers = (stations) => {
+      console.log(`Adding ${stations.length} station markers`);
+      
+      stations.forEach(station => {
+        try {
+          const stationLat = parseFloat(station.lat);
+          const stationLng = parseFloat(station.lng);
           
-          // 加載站點資料
-          await ubikeService.fetchStations();
+          if (isNaN(stationLat) || isNaN(stationLng)) {
+            console.warn('Invalid station coordinates:', station);
+            return;
+          }
           
-          // 顯示初始區域站點（台北市政府附近）
-          setTimeout(() => {
-            handleMapClick({ lngLat: { lng: 121.5654, lat: 25.0330 } });
-          }, 1000);
+          const sbi = parseInt(station.sbi || 0);
+          const tot = parseInt(station.tot || 0);
           
-          loading.value = false;
-        });
-        
-        // 綁定地圖點擊事件
-        mapInstance.value.on('click', handleMapClick);
-        
-      } catch (error) {
-        console.error('地圖初始化失敗:', error);
-        loading.value = false;
-      }
-    });
+          // 根據可借用車輛百分比決定顏色
+          const bikeAvailability = tot > 0 ? (sbi / tot * 100) : 0;
+          let markerColor = '#AAAAAA'; // 預設灰色（普通）
+          
+          if (bikeAvailability < 20) {
+            markerColor = '#FF0000'; // 紅色 - 很難借到車
+          } else if (bikeAvailability < 40) {
+            markerColor = '#FF7F7F'; // 淺紅色 - 較難借到車
+          } else if (bikeAvailability > 70) {
+            markerColor = '#00AA00'; // 綠色 - 很容易借到車
+          } else if (bikeAvailability > 50) {
+            markerColor = '#7FFF7F'; // 淺綠色 - 比較容易借到車
+          }
 
+          // 創建自定義 Ubike 站點標記元素
+          const ubikeMarkerElement = document.createElement('div');
+          ubikeMarkerElement.className = 'ubike-marker';
+          ubikeMarkerElement.style.backgroundColor = markerColor;
+          ubikeMarkerElement.innerHTML = `<div class="ubike-icon">U</div>`;
+
+          const marker = mapFactory.value.createMarker([stationLng, stationLat], {
+            element: ubikeMarkerElement,
+            data: station
+          });
+          
+          // 綁定事件
+          marker.on('mouseenter', () => showStationInfo(marker));
+          marker.on('mouseleave', hideStationInfo);
+          
+          // 添加到地圖
+          marker.addTo(mapInstance.value);
+          markers.value.push(marker);
+        } catch (error) {
+          console.error('Failed to add station marker:', error, station);
+        }
+      });
+      
+      console.log(`Added ${markers.value.length} markers to map`);
+    };
+    
     // 處理地圖點擊
     const handleMapClick = (e) => {
+      console.log('Map clicked at:', e.lngLat);
+      
       const center = [e.lngLat.lng, e.lngLat.lat];
       const radius = 500; // 500 公尺
       
@@ -159,78 +177,71 @@ export default {
         });
         currentCircle.value.addTo(mapInstance.value);
         
-        // 查找範圍內站點
-        const nearbyStations = ubikeService.findStationsWithinRadius(center, radius);
+        // 找出範圍內站點 - 使用圓圈內部的方法
+        const nearbyStations = currentCircle.value.findStationsInCircle(ubikeService.stations);
         stationsInView.value = nearbyStations;
-        console.log(`找到 ${nearbyStations.length} 個站點`);
+        console.log(`Found ${nearbyStations.length} stations within ${radius}m radius`);
         
         // 添加站點標記
         addStationMarkers(nearbyStations);
         
       } catch (error) {
-        console.error('查找站點時出錯:', error);
+        console.error('Error handling map click:', error);
       }
     };
     
-    // 添加站點標記
-    const addStationMarkers = (stations) => {
-      stations.forEach(station => {
-        try {
-          const stationLat = parseFloat(station.lat);
-          const stationLng = parseFloat(station.lng);
+    onMounted(async () => {
+      try {
+        console.log('Initializing map...');
+        // 初始化地圖
+        mapFactory.value = new MapboxFactory(mapboxgl.accessToken);
+        mapInstance.value = mapFactory.value.createMap('map', {
+          center: [121.5654, 25.0330],
+          zoom: 12,
+          style: 'mapbox://styles/mapbox/streets-v12'
+        });
+        
+        // 等待地圖載入
+        mapInstance.value.on('load', async () => {
+          console.log('Map loaded successfully');
           
-          if (isNaN(stationLat) || isNaN(stationLng)) {
-            console.warn('站點座標無效:', station);
-            return; // 跳過無效座標
-          }
+          // 加載站點資料
+          await ubikeService.fetchStations();
           
-          const sbi = parseInt(station.sbi || 0);
-          const tot = parseInt(station.tot || 0);
+          // 顯示初始區域站點（台北市政府附近）
+          setTimeout(() => {
+            handleMapClick({ lngLat: { lng: 121.5654, lat: 25.0330 } });
+          }, 1000);
           
-          // 根據可借用車輛百分比決定顏色
-          const bikeAvailability = tot > 0 ? (sbi / tot * 100) : 0;
-          let markerColor = '#AAAAAA'; // 預設灰色（普通）
-          
-          if (bikeAvailability < 20) {
-            markerColor = '#FF0000'; // 紅色 - 很難借到車
-          } else if (bikeAvailability < 40) {
-            markerColor = '#FF7F7F'; // 淺紅色 - 較難借到車
-          } else if (bikeAvailability > 70) {
-            markerColor = '#00FF00'; // 綠色 - 很容易借到車
-          } else if (bikeAvailability > 50) {
-            markerColor = '#7FFF7F'; // 淺綠色 - 比較容易借到車
-          }
-
-          // 創建自定義 Ubike 站點標記元素
-          const ubikeMarkerElement = document.createElement('div');
-          ubikeMarkerElement.className = 'ubike-marker';
-          ubikeMarkerElement.style.backgroundColor = markerColor;
-          ubikeMarkerElement.innerHTML = `<div class="ubike-icon">U</div>`;
-
-          const marker = mapFactory.value.createMarker([stationLng, stationLat], {
-            element: ubikeMarkerElement,
-            data: station
-          });
-          
-          // 添加事件處理
-          marker.on('mouseenter', e => showStationInfo(marker, e));
-          marker.on('mouseleave', hideStationInfo);
-          
-          marker.addTo(mapInstance.value);
-          markers.value.push(marker);
-        } catch (error) {
-          console.error('添加站點標記失敗:', error, station);
-        }
-      });
-    };
+          loading.value = false;
+        });
+        
+        // 綁定地圖點擊事件
+        mapInstance.value.on('click', handleMapClick);
+        
+      } catch (error) {
+        console.error('Failed to initialize map:', error);
+        loading.value = false;
+      }
+    });
+    
+    // 釋放資源
+    onBeforeUnmount(() => {
+      clearMarkers();
+      if (currentCircle.value) {
+        currentCircle.value.remove();
+      }
+      if (selectedInfoWindow.value) {
+        selectedInfoWindow.value.remove();
+      }
+      if (mapInstance.value) {
+        mapInstance.value.off('click');
+      }
+    });
 
     return {
       loading,
-      stationCountText,
-      selectedStation,
-      stationInfoStyle,
-      stationInfo,
-      getStationName
+      stationCountText
     };
   }
 }
@@ -304,36 +315,15 @@ export default {
   font-size: 14px;
 }
 
-/* 站點信息樣式 */
-.station-info {
+#loading {
   position: absolute;
-  display: none;
-  background: white;
-  padding: 10px;
-  border-radius: 4px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 20px;
+  border-radius: 5px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-  z-index: 2;
-  max-width: 250px;
-  pointer-events: none;
-}
-
-.station-info h4 {
-  margin: 0 0 5px 0;
-  font-size: 14px;
-}
-
-.station-info p {
-  margin: 5px 0;
-  font-size: 12px;
-}
-
-.bike-available {
-  color: green;
-  font-weight: bold;
-}
-
-.bike-unavailable {
-  color: red;
-  font-weight: bold;
+  z-index: 3;
 }
 </style>
