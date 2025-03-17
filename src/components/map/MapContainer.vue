@@ -1,4 +1,4 @@
-// src/components/map/MapContainer.vue
+<!-- src/components/map/MapContainer.vue -->
 <template>
   <div>
     <div id="map" class="map-container"></div>
@@ -9,6 +9,17 @@
       <p><small>若要使用導航功能，請點擊右上角的「開始導航模式」按鈕</small></p>
     </div>
     <div id="loading" v-if="loading">載入中...</div>
+    
+    <!-- 添加導航控制組件 -->
+    <navigation-control 
+      ref="navControl"
+      @navigation-toggle="handleNavigationToggle"
+      @navigation-exit="handleNavigationExit"
+      @start-simulation="startSimulation"
+      @toggle-pause-resume="togglePauseResume"
+      @speed-change="handleSpeedChange"
+      @points-change="handlePointsChange"
+    />
   </div>
 </template>
 
@@ -17,9 +28,14 @@ import { ref, onMounted, computed, onBeforeUnmount } from 'vue';
 import mapboxgl from 'mapbox-gl';
 import MapboxFactory from '@/services/map/MapboxFactory';
 import UbikeService from '@/services/ubike/UbikeService';
+import NavigationService from '@/services/navigation/NavigationService';
+import NavigationControl from '@/components/navigation/NavigationControl.vue';
 
 export default {
   name: 'MapContainer',
+  components: {
+    NavigationControl
+  },
   setup() {
     const loading = ref(true);
     const stationsInView = ref([]);
@@ -28,7 +44,12 @@ export default {
     const markers = ref([]);
     const currentCircle = ref(null);
     const ubikeService = new UbikeService();
+    const navigationService = new NavigationService();
     const selectedInfoWindow = ref(null);
+    const navControl = ref(null);
+    
+    // 導航相關狀態
+    const navigationActive = ref(false);
     
     // 設置 mapbox token
     mapboxgl.accessToken = 'pk.eyJ1IjoiYW5keWNoaXU2MDkiLCJhIjoiY20xaWxjemc1MGVoZzJqb2NyZ2M2enE1aSJ9.PBoFruvUCgE-xt0MbTYmkg';
@@ -39,6 +60,61 @@ export default {
         : '';
     });
 
+    // 處理導航模式開關
+    const handleNavigationToggle = (active) => {
+      navigationActive.value = active;
+      console.log('Navigation mode:', active ? 'ON' : 'OFF');
+      
+      if (active) {
+        // 進入導航模式
+        clearMarkers();
+        if (currentCircle.value) {
+          currentCircle.value.remove();
+          currentCircle.value = null;
+        }
+        // 重置導航狀態
+        navigationService.reset();
+      } 
+    };
+    
+    // 處理退出導航
+    const handleNavigationExit = () => {
+      navigationActive.value = false;
+      
+      // 清理導航資源
+      navigationService.reset();
+      
+      // 返回地圖初始狀態
+      if (mapInstance.value) {
+        mapInstance.value.setCenter([121.5654, 25.0330]);
+        mapInstance.value.setZoom(12);
+      }
+    };
+    
+    // 開始模擬
+    const startSimulation = () => {
+      navigationService.startSimulation();
+    };
+    
+    // 切換暫停/繼續模擬
+    const togglePauseResume = () => {
+      navigationService.togglePauseResume();
+    };
+    
+    // 處理速度變化
+    const handleSpeedChange = (speed) => {
+      navigationService.setSimulationSpeed(speed);
+    };
+    
+    // 處理插值點數變化
+    const handlePointsChange = (points) => {
+      navigationService.setPointsToInsert(points);
+      // 如果已經計算了路線，則重新計算
+      if (navigationService.startPoint && navigationService.endPoint) {
+        navigationService.recalculateRoute();
+      }
+    };
+    
     // 清除所有標記
     const clearMarkers = () => {
       console.log(`Clearing ${markers.value.length} markers`);
@@ -46,41 +122,79 @@ export default {
       markers.value = [];
     };
     
-    // 顯示站點信息
-    const showStationInfo = (marker) => {
-      const station = marker.getData();
-      if (!station) {
-        console.warn('No station data available for marker');
+    // 處理地圖點擊
+    const handleMapClick = (e) => {
+      const center = [e.lngLat.lng, e.lngLat.lat];
+      
+      // 如果處於導航模式，使用導航邏輯
+      if (navigationActive.value) {
+        handleNavigationClick(center);
         return;
       }
       
-      console.log('Showing station info:', station.sna);
+      // 普通模式處理邏輯
+      const radius = 500; // 500 公尺
       
-      // 如果已經有信息窗口，先移除
-      if (selectedInfoWindow.value) {
-        selectedInfoWindow.value.remove();
+      try {
+        // 清除之前的標記和圓圈
+        clearMarkers();
+        if (currentCircle.value) {
+          currentCircle.value.remove();
+          currentCircle.value = null;
+        }
+        
+        // 新增點擊中心標記
+        const centerMarkerElement = document.createElement('div');
+        centerMarkerElement.className = 'click-marker';
+        centerMarkerElement.innerHTML = `
+          <div class="pulse"></div>
+          <div class="center-point"></div>
+        `;
+        
+        const centerMarker = mapFactory.value.createMarker(center, {
+          element: centerMarkerElement,
+          anchor: 'center',
+          data: { isClickPoint: true }
+        });
+        
+        centerMarker.addTo(mapInstance.value);
+        markers.value.push(centerMarker);
+
+        // 新增圓圈
+        currentCircle.value = mapFactory.value.createCircle(center, radius, {
+          id: 'search-radius',
+          fillColor: 'rgba(0, 100, 255, 0.2)',
+          strokeColor: 'rgba(0, 100, 255, 0.8)'
+        });
+        currentCircle.value.addTo(mapInstance.value);
+        
+        // 使用圓圈尋找範圍內站點
+        const nearbyStations = currentCircle.value.findStationsInCircle(ubikeService.stations);
+        stationsInView.value = nearbyStations;
+        console.log(`找到 ${nearbyStations.length} 個站點`);
+        
+        // 添加站點標記
+        addStationMarkers(nearbyStations);
+        
+      } catch (error) {
+        console.error('Error handling map click:', error);
       }
-      
-      // 創建新的自定義信息窗口
-      selectedInfoWindow.value = mapFactory.value.createInfoWindow({
-        offset: { x: 0, y: -15 }
-      });
-      
-      // 設置信息窗口內容和位置
-      selectedInfoWindow.value.setStationInfo(station);
-      selectedInfoWindow.value.setLngLat(marker.getLngLat());
-      selectedInfoWindow.value.addTo(mapInstance.value);
     };
     
-    // 隱藏站點信息
-    const hideStationInfo = () => {
-      if (selectedInfoWindow.value) {
-        selectedInfoWindow.value.remove();
-        selectedInfoWindow.value = null;
+    // 處理導航模式下的點擊
+    const handleNavigationClick = (coordinates) => {
+      if (!navigationService.startPoint) {
+        // 設置起點
+        navigationService.setStartPoint(coordinates);
+      } else if (!navigationService.endPoint) {
+        // 設置終點
+        navigationService.setEndPoint(coordinates);
+        // 計算路線
+        navigationService.calculateRoute();
       }
     };
     
-    // 添加 UBike 站點標記
+    // 添加站點標記
     const addStationMarkers = (stations) => {
       console.log(`Adding ${stations.length} station markers`);
       
@@ -137,56 +251,37 @@ export default {
       console.log(`Added ${markers.value.length} markers to map`);
     };
     
-    // 處理地圖點擊
-    const handleMapClick = (e) => {
-      console.log('Map clicked at:', e.lngLat);
+    // 顯示站點信息
+    const showStationInfo = (marker) => {
+      const station = marker.getData();
+      if (!station) {
+        console.warn('No station data available for marker');
+        return;
+      }
       
-      const center = [e.lngLat.lng, e.lngLat.lat];
-      const radius = 500; // 500 公尺
+      console.log('Showing station info:', station.sna);
       
-      try {
-        // 清除之前的標記和圓圈
-        clearMarkers();
-        if (currentCircle.value) {
-          currentCircle.value.remove();
-          currentCircle.value = null;
-        }
-        
-        // 新增點擊中心標記
-        const centerMarkerElement = document.createElement('div');
-        centerMarkerElement.className = 'click-marker';
-        centerMarkerElement.innerHTML = `
-          <div class="pulse"></div>
-          <div class="center-point"></div>
-        `;
-        
-        const centerMarker = mapFactory.value.createMarker(center, {
-          element: centerMarkerElement,
-          anchor: 'center',
-          data: { isClickPoint: true }
-        });
-        
-        centerMarker.addTo(mapInstance.value);
-        markers.value.push(centerMarker);
-
-        // 新增圓圈
-        currentCircle.value = mapFactory.value.createCircle(center, radius, {
-          id: 'search-radius',
-          fillColor: 'rgba(0, 100, 255, 0.2)',
-          strokeColor: 'rgba(0, 100, 255, 0.8)'
-        });
-        currentCircle.value.addTo(mapInstance.value);
-        
-        // 找出範圍內站點 - 使用圓圈內部的方法
-        const nearbyStations = currentCircle.value.findStationsInCircle(ubikeService.stations);
-        stationsInView.value = nearbyStations;
-        console.log(`Found ${nearbyStations.length} stations within ${radius}m radius`);
-        
-        // 添加站點標記
-        addStationMarkers(nearbyStations);
-        
-      } catch (error) {
-        console.error('Error handling map click:', error);
+      // 如果已經有信息窗口，先移除
+      if (selectedInfoWindow.value) {
+        selectedInfoWindow.value.remove();
+      }
+      
+      // 創建新的自定義信息窗口
+      selectedInfoWindow.value = mapFactory.value.createInfoWindow({
+        offset: { x: 0, y: -15 }
+      });
+      
+      // 設置信息窗口內容和位置
+      selectedInfoWindow.value.setStationInfo(station);
+      selectedInfoWindow.value.setLngLat(marker.getLngLat());
+      selectedInfoWindow.value.addTo(mapInstance.value);
+    };
+    
+    // 隱藏站點信息
+    const hideStationInfo = () => {
+      if (selectedInfoWindow.value) {
+        selectedInfoWindow.value.remove();
+        selectedInfoWindow.value = null;
       }
     };
     
@@ -204,6 +299,56 @@ export default {
         // 等待地圖載入
         mapInstance.value.on('load', async () => {
           console.log('Map loaded successfully');
+          
+          // 初始化導航服務
+          navigationService.initialize(mapInstance.value, mapFactory.value);
+          
+          // 添加導航事件監聽
+          navigationService.on('routeCalculated', (routeData) => {
+            console.log('路線計算完成:', routeData);
+            // 更新導航控制面板
+            if (navControl.value) {
+              navControl.value.updateRouteInfo(routeData.distance, routeData.duration);
+            }
+          });
+          
+          navigationService.on('simulationStarted', () => {
+            if (navControl.value) {
+              navControl.value.updateSimulationStatus(true, false);
+            }
+          });
+          
+          navigationService.on('simulationPaused', () => {
+            if (navControl.value) {
+              navControl.value.updateSimulationStatus(true, true);
+            }
+          });
+          
+          navigationService.on('simulationResumed', () => {
+            if (navControl.value) {
+              navControl.value.updateSimulationStatus(true, false);
+            }
+          });
+          
+          navigationService.on('simulationStopped', () => {
+            if (navControl.value) {
+              navControl.value.updateSimulationStatus(false, false);
+            }
+          });
+          
+          navigationService.on('positionUpdated', (data) => {
+            if (navControl.value) {
+              navControl.value.updateRemainingInfo(data.remainingDistance, data.remainingTime);
+            }
+          });
+          
+          navigationService.on('simulationCompleted', () => {
+            console.log('模擬導航完成');
+            if (navControl.value) {
+              navControl.value.updateSimulationStatus(false, false);
+              navControl.value.status = '已到達目的地';
+            }
+          });
           
           // 加載站點資料
           await ubikeService.fetchStations();
@@ -234,6 +379,7 @@ export default {
       if (selectedInfoWindow.value) {
         selectedInfoWindow.value.remove();
       }
+      navigationService.cleanup();
       if (mapInstance.value) {
         mapInstance.value.off('click');
       }
@@ -241,7 +387,14 @@ export default {
 
     return {
       loading,
-      stationCountText
+      stationCountText,
+      handleNavigationToggle,
+      handleNavigationExit,
+      startSimulation,
+      togglePauseResume,
+      handleSpeedChange,
+      handlePointsChange,
+      navControl
     };
   }
 }
@@ -313,6 +466,82 @@ export default {
   color: white;
   font-weight: bold;
   font-size: 14px;
+}
+
+/* 導航標記樣式 */
+.nav-marker {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+.start-marker {
+  background-color: #4caf50;
+  border: 2px solid white;
+}
+
+.end-marker {
+  background-color: #e74c3c;
+  border: 2px solid white;
+}
+
+.nav-marker span {
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* 使用者當前位置標記 */
+.user-marker {
+  position: relative;
+  width: 36px;
+  height: 36px;
+}
+
+.user-dot {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background-color: #3887be;
+  border-radius: 50%;
+  border: 3px solid white;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.user-marker::before {
+  content: "";
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(56, 135, 190, 0.4);
+  opacity: 0.6;
+  animation: locationPulse 2s infinite;
+  top: 0;
+  left: 0;
+}
+
+@keyframes locationPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
 }
 
 #loading {
