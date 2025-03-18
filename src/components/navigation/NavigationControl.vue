@@ -73,6 +73,7 @@
 
 <script>
 import { ref } from 'vue';
+import GeoUtils from '@/services/utils/GeoUtils';
 
 export default {
   name: 'NavigationControl',
@@ -153,8 +154,8 @@ export default {
     // 更新路線資訊
     const updateRouteInfo = (distance, duration) => {
       routeCalculated.value = true;
-      distanceInfo.value = `總距離: ${formatDistance(distance)}`;
-      timeInfo.value = `預計時間: ${formatTime(duration)}`;
+      distanceInfo.value = `總距離: ${GeoUtils.formatDistance(distance)}`;
+      timeInfo.value = `預計時間: ${GeoUtils.formatTime(duration)}`;
     };
     
     // 更新模擬狀態
@@ -171,20 +172,8 @@ export default {
     
     // 更新剩餘信息
     const updateRemainingInfo = (remainingDistance, remainingTime) => {
-      distanceInfo.value = `剩餘距離: ${formatDistance(remainingDistance)}`;
-      timeInfo.value = `剩餘時間: ${formatTime(remainingTime)}`;
-    };
-    
-    // 格式化時間
-    const formatTime = (seconds) => {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = Math.round(seconds % 60);
-      return `${minutes} 分 ${remainingSeconds} 秒`;
-    };
-    
-    // 格式化距離
-    const formatDistance = (meters) => {
-      return `${(meters / 1000).toFixed(2)} 公里`;
+      distanceInfo.value = `剩餘距離: ${GeoUtils.formatDistance(remainingDistance)}`;
+      timeInfo.value = `剩餘時間: ${GeoUtils.formatTime(remainingTime)}`;
     };
     
     return {
@@ -211,107 +200,4 @@ export default {
 }
 </script>
 
-<style scoped>
-.nav-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background-color: #4285f4;
-  color: white;
-  border: none;
-  padding: 10px 15px;
-  border-radius: 5px;
-  font-weight: bold;
-  cursor: pointer;
-  z-index: 10;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-  transition: background-color 0.3s;
-}
-
-.nav-button:hover {
-  background-color: #2b6fd3;
-}
-
-.nav-button.active {
-  background-color: #e74c3c;
-}
-
-.nav-info {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 15px;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-  z-index: 15;
-  min-width: 250px;
-  margin-top: 50px;
-}
-
-.nav-info h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.nav-info p {
-  margin: 5px 0;
-  color: #666;
-}
-
-.slider-container {
-  margin: 15px 0;
-}
-
-.slider-container label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 14px;
-  color: #555;
-}
-
-.slider-container input {
-  width: 100%;
-}
-
-.control-button {
-  background-color: #4285f4;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 10px;
-  font-weight: bold;
-  margin-right: 5px;
-}
-
-.control-button:hover {
-  background-color: #2b6fd3;
-}
-
-.control-button.exit {
-  background-color: #e74c3c;
-}
-
-.control-button.exit:hover {
-  background-color: #c0392b;
-}
-
-.control-button.start {
-  background-color: #27ae60;
-}
-
-.control-button.start:hover {
-  background-color: #219653;
-}
-
-.control-button.pause {
-  background-color: #f39c12;
-}
-
-.control-button.pause:hover {
-  background-color: #d68910;
-}
-</style>
+<!-- 無需獨立樣式區，已移至主樣式表 -->

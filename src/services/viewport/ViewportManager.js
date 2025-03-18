@@ -1,4 +1,6 @@
 // src/services/viewport/ViewportManager.js
+import GeoUtils from '@/services/utils/GeoUtils';
+
 export default class ViewportManager {
     constructor(mapFactory, ubikeService) {
       this.mapFactory = mapFactory;
@@ -37,6 +39,14 @@ export default class ViewportManager {
       
       // 獲取當前地圖視野的邊界
       const bounds = mapInstance.getBounds();
+      
+      // 這裡我們仍使用邊界框檢查，而不是距離計算，因為對於地圖視圖這是更高效的方法
+      // 如果將來需要更改為基於距離的計算，可以使用 GeoUtils
+      return this.findStationsInBounds(stations, bounds);
+    }
+    
+    // 基於邊界框查找站點（更高效的視覺化方法）
+    findStationsInBounds(stations, bounds) {
       const sw = bounds.getSouthWest();
       const ne = bounds.getNorthEast();
       
@@ -73,6 +83,11 @@ export default class ViewportManager {
       console.log(`視野範圍內找到 ${stationsInView.length} 個站點`);
       return stationsInView;
     }
+    
+    // 如果需要基於圓形半徑的搜索
+    findStationsInRadius(stations, center, radius) {
+      return GeoUtils.findStationsInRadius(stations, center, radius);
+    }
   
     // 添加導航過程中的站點標記
     addNavigationStationMarkers(stations, mapInstance) {
@@ -85,39 +100,43 @@ export default class ViewportManager {
             return;
           }
           
-          const sbi = parseInt(station.sbi || 0);
-          const tot = parseInt(station.tot || 0);
-          
-          // 根據可借用車輛百分比決定顏色
-          const bikeAvailability = tot > 0 ? (sbi / tot * 100) : 0;
-          let markerColor = '#AAAAAA'; // 預設灰色（普通）
-          
-          if (bikeAvailability < 20) {
-            markerColor = '#FF0000'; // 紅色 - 很難借到車
-          } else if (bikeAvailability < 40) {
-            markerColor = '#FF7F7F'; // 淺紅色 - 較難借到車
-          } else if (bikeAvailability > 70) {
-            markerColor = '#00AA00'; // 綠色 - 很容易借到車
-          } else if (bikeAvailability > 50) {
-            markerColor = '#7FFF7F'; // 淺綠色 - 比較容易借到車
-          }
-          
-          // 創建自定義 Ubike 站點標記元素
-          const ubikeMarkerElement = document.createElement('div');
-          ubikeMarkerElement.className = 'ubike-marker';
-          ubikeMarkerElement.style.backgroundColor = markerColor;
-          ubikeMarkerElement.innerHTML = `<div class="ubike-icon">U</div>`;
-          
-          const marker = this.mapFactory.createMarker([stationLng, stationLat], {
-            element: ubikeMarkerElement,
-            data: station
-          });
-          
+          const marker = this.createStationMarker(station, [stationLng, stationLat]);
           marker.addTo(mapInstance);
           this.navigationStationMarkers.push(marker);
         } catch (error) {
           console.error('Failed to add navigation station marker:', error);
         }
+      });
+    }
+    
+    // 創建站點標記 - 可被重複使用
+    createStationMarker(station, coordinates) {
+      const sbi = parseInt(station.sbi || 0);
+      const tot = parseInt(station.tot || 0);
+      
+      // 根據可借用車輛百分比決定顏色
+      const bikeAvailability = tot > 0 ? (sbi / tot * 100) : 0;
+      let markerColor = '#AAAAAA'; // 預設灰色（普通）
+      
+      if (bikeAvailability < 20) {
+        markerColor = '#FF0000'; // 紅色 - 很難借到車
+      } else if (bikeAvailability < 40) {
+        markerColor = '#FF7F7F'; // 淺紅色 - 較難借到車
+      } else if (bikeAvailability > 70) {
+        markerColor = '#00AA00'; // 綠色 - 很容易借到車
+      } else if (bikeAvailability > 50) {
+        markerColor = '#7FFF7F'; // 淺綠色 - 比較容易借到車
+      }
+      
+      // 創建自定義 Ubike 站點標記元素
+      const ubikeMarkerElement = document.createElement('div');
+      ubikeMarkerElement.className = 'ubike-marker';
+      ubikeMarkerElement.style.backgroundColor = markerColor;
+      ubikeMarkerElement.innerHTML = `<div class="ubike-icon">U</div>`;
+      
+      return this.mapFactory.createMarker(coordinates, {
+        element: ubikeMarkerElement,
+        data: station
       });
     }
   

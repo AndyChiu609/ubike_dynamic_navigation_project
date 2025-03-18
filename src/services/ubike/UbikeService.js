@@ -1,3 +1,6 @@
+// src/services/ubike/UbikeService.js
+import GeoUtils from '@/services/utils/GeoUtils';
+
 // UbikeService 類別：負責獲取和處理 Ubike 站點資料
 class UbikeService {
     constructor() {
@@ -58,50 +61,10 @@ class UbikeService {
       ];
     }
   
-    // 使用 Haversine 公式計算兩點間距離（公尺）
-    calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000; // 地球半徑（公尺）
-      const dLat = this.deg2rad(lat2 - lat1);
-      const dLon = this.deg2rad(lon2 - lon1);
-      const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-  
-    deg2rad(deg) {
-      return deg * (Math.PI / 180);
-    }
-  
     findStationsWithinRadius(center, radius) {
       console.log(`搜尋以 [${center}] 為中心，半徑 ${radius} 公尺內的站點`);
       
-      if (!this.stations?.length) {
-        console.error('沒有站點資料可供搜尋');
-        return [];
-      }
-      
-      // 篩選有效座標的站點
-      const validStations = this.stations.filter(station => {
-        const stationLng = parseFloat(station.lng || station.longitude);
-        const stationLat = parseFloat(station.lat || station.latitude);
-        
-        return !isNaN(stationLng) && !isNaN(stationLat);
-      });
-      
-      // 找出範圍內的站點
-      return validStations.filter(station => {
-        const stationLng = parseFloat(station.lng || station.longitude);
-        const stationLat = parseFloat(station.lat || station.latitude);
-        
-        const distance = this.calculateDistance(
-          center[1], center[0],
-          stationLat, stationLng
-        );
-        
-        return distance <= radius;
-      });
+      return GeoUtils.findStationsInRadius(this.stations, center, radius);
     }
   }
   

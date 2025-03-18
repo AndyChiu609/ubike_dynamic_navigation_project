@@ -1,5 +1,6 @@
 // src/services/map/MapboxCircle.js
 import * as turf from '@turf/turf';
+import GeoUtils from '@/services/utils/GeoUtils';
 
 class MapboxCircle {
   constructor(center, radius, options = {}) {
@@ -47,61 +48,12 @@ class MapboxCircle {
     return this;
   }
 
-  // 使用原生方式計算範圍內的站點
+  // 使用 GeoUtils 計算範圍內的站點
   findStationsInCircle(stations) {
     console.log(`Searching for stations within ${this.radius}m radius from [${this.center}]...`);
     console.log(`Total stations available: ${stations ? stations.length : 0}`);
     
-    if (!stations || !Array.isArray(stations) || stations.length === 0) {
-      console.warn('No stations data available');
-      return [];
-    }
-    
-    // 使用 Haversine 公式計算兩點之間的距離
-    const stationsWithinRadius = stations.filter(station => {
-      try {
-        const stationLng = parseFloat(station.lng || station.longitude);
-        const stationLat = parseFloat(station.lat || station.latitude);
-        
-        if (isNaN(stationLng) || isNaN(stationLat)) {
-          return false;
-        }
-        
-        // 使用 Haversine 公式計算距離
-        const distance = this.calculateDistance(
-          this.center[1], this.center[0], 
-          stationLat, stationLng
-        );
-        
-        return distance <= this.radius;
-      } catch (error) {
-        console.error('Error processing station:', error, station);
-        return false;
-      }
-    });
-    
-    console.log(`Found ${stationsWithinRadius.length} stations within radius`);
-    return stationsWithinRadius;
-  }
-
-  // Haversine 公式計算地球上兩點之間的距離（公尺）
-  calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // 地球半徑（公尺）
-    const dLat = this.deg2rad(lat2 - lat1);
-    const dLon = this.deg2rad(lon2 - lon1);
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    
-    return distance;
-  }
-
-  // 角度轉弧度
-  deg2rad(deg) {
-    return deg * (Math.PI / 180);
+    return GeoUtils.findStationsInRadius(stations, this.center, this.radius);
   }
 
   remove() {

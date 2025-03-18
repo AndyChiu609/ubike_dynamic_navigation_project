@@ -1,25 +1,422 @@
+/* 主要變數定義 */
+:root {
+  /* 色彩系統 */
+  --color-primary: #4285f4;
+  --color-primary-dark: #2b6fd3;
+  --color-secondary: #e74c3c;
+  --color-secondary-dark: #c0392b;
+  --color-success: #27ae60;
+  --color-success-dark: #219653;
+  --color-warning: #f39c12;
+  --color-warning-dark: #d68910;
+  --color-info: #3887be;
+  --color-background: #f8f4f0;
+  
+  /* 文字顏色 */
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-light: #999999;
+  
+  /* 間距 */
+  --spacing-xs: 5px;
+  --spacing-sm: 10px;
+  --spacing-md: 15px;
+  --spacing-lg: 20px;
+  
+  /* 陰影 */
+  --shadow-sm: 0 0 5px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 0 10px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 2px 12px rgba(0, 0, 0, 0.25);
+  
+  /* 圓角 */
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  
+  /* 過渡效果 */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.3s;
+}
+
+/* 基本樣式重置 */
 body {
-    margin: 0;
-    padding: 0;
-    font-family: 'Arial', sans-serif;
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial', sans-serif;
+  color: var(--text-primary);
+}
+
+/* 地圖容器 */
+.map-container {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 地圖覆蓋層 */
+.map-overlay {
+  position: absolute;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.9);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  max-width: 300px;
+  z-index: 1;
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: var(--spacing-sm);
   }
   
-  .map-container {
-    position: absolute;
-    top: 0;
-    bottom: 0;
+  p {
+    margin: var(--spacing-xs) 0;
+  }
+}
+
+/* 加載中指示器 */
+#loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.9);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 3;
+}
+
+/* 通用按鈕樣式 */
+.nav-button, .control-button {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  
+  &:hover {
+    background-color: var(--color-primary-dark);
+  }
+  
+  &.active {
+    background-color: var(--color-secondary);
+    
+    &:hover {
+      background-color: var(--color-secondary-dark);
+    }
+  }
+  
+  &.exit {
+    background-color: var(--color-secondary);
+    
+    &:hover {
+      background-color: var(--color-secondary-dark);
+    }
+  }
+  
+  &.start {
+    background-color: var(--color-success);
+    
+    &:hover {
+      background-color: var(--color-success-dark);
+    }
+  }
+  
+  &.pause {
+    background-color: var(--color-warning);
+    
+    &:hover {
+      background-color: var(--color-warning-dark);
+    }
+  }
+}
+
+/* 導航按鈕特殊樣式 */
+.nav-button {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  z-index: 10;
+  box-shadow: var(--shadow-sm);
+}
+
+/* 導航信息面板 */
+.nav-info {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.9);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 15;
+  min-width: 250px;
+  margin-top: 50px;
+  
+  h4 {
+    margin-top: 0;
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-primary);
+  }
+  
+  p {
+    margin: var(--spacing-xs) 0;
+    color: var(--text-secondary);
+  }
+}
+
+/* 滑塊容器 */
+.slider-container {
+  margin: var(--spacing-md) 0;
+  
+  label {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  
+  input {
     width: 100%;
-    height: 100%;
+  }
+}
+
+/* 標記樣式 */
+/* 點擊位置標記 */
+.click-marker {
+  width: 30px;
+  height: 30px;
+  position: relative;
+  
+  .center-point {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: red;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    border: 2px solid white;
+    box-shadow: var(--shadow-sm);
   }
   
-  .map-overlay {
+  .pulse {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 10px;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-    max-width: 300px;
-    z-index: 1;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: rgba(255, 0, 0, 0.4);
+    opacity: 0.6;
+    animation: pulse 2s infinite;
+    top: 0;
+    left: 0;
   }
+}
+
+/* Ubike 站點標記 */
+.ubike-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  border: 2px solid white;
+  
+  .ubike-icon {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+  }
+}
+
+/* 導航標記 */
+.nav-marker {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  
+  &.start-marker {
+    background-color: var(--color-success);
+    border: 2px solid white;
+  }
+  
+  &.end-marker {
+    background-color: var(--color-secondary);
+    border: 2px solid white;
+  }
+  
+  span {
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+  }
+}
+
+/* 使用者當前位置標記 */
+.user-marker {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  
+  .user-dot {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background-color: var(--color-info);
+    border-radius: 50%;
+    border: 3px solid white;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    box-shadow: var(--shadow-sm);
+  }
+  
+  &::before {
+    content: "";
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: rgba(56, 135, 190, 0.4);
+    opacity: 0.6;
+    animation: locationPulse 2s infinite;
+    top: 0;
+    left: 0;
+  }
+}
+
+/* 動畫定義 */
+@keyframes pulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.5);
+    opacity: 0.6;
+  }
+}
+
+@keyframes locationPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+}
+
+/* 自定義信息窗口樣式 */
+.custom-info-window {
+  position: absolute;
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 150px;
+  max-width: 280px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  z-index: 10;
+  
+  .custom-info-window-pointer {
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid white;
+  }
+  
+  .station-info {
+    h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: var(--text-primary);
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+    }
+    
+    .address {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    
+    .progress-bar {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      
+      .bar {
+        width: 100%;
+        background-color: #f0f0f0;
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+        
+        .fill {
+          height: 100%;
+        }
+      }
+      
+      .percentage {
+        margin-left: 8px;
+        font-weight: bold;
+      }
+    }
+    
+    .status {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+      
+      .bikes {
+        font-size: 12px;
+        
+        .available {
+          margin-bottom: 4px;
+          font-weight: bold;
+        }
+      }
+      
+      .update-time {
+        font-size: 11px;
+        color: var(--text-light);
+        text-align: right;
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 // src/services/navigation/NavigationService.js
 import mapboxgl from 'mapbox-gl';
+import GeoUtils from '@/services/utils/GeoUtils';
 
 class NavigationService {
   constructor() {
@@ -481,7 +482,7 @@ class NavigationService {
     return result;
   }
   
-  // 查找視野範圍內的所有 Ubike 站點（原生方法，不使用外部套件）
+  // 查找視野範圍內的所有 Ubike 站點
   findStationsInViewport(stations, mapInstance) {
     if (!stations || !Array.isArray(stations) || stations.length === 0) {
       console.warn('沒有站點資料可供搜尋');
@@ -494,55 +495,28 @@ class NavigationService {
     const ne = bounds.getNorthEast();
     
     // 計算從中心到東北角的距離作為半徑（覆蓋整個視野）
-    const radius = this.calculateDistance(
+    const radius = GeoUtils.calculateDistance(
       center.lat, center.lng,
       ne.lat, ne.lng
     );
     
-    // 使用 Circle 的查詢方法
-    // 注意：這需要創建一個臨時的 Circle 或直接使用計算方法
-    return this.findStationsInRadius(stations, [center.lng, center.lat], radius);
+    // 使用 GeoUtils 的查詢方法
+    return GeoUtils.findStationsInRadius(stations, [center.lng, center.lat], radius);
   }
   
-  // 使用 Haversine 公式計算兩點間距離（公尺）
-  calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // 地球半徑（公尺）
-    const dLat = this.deg2rad(lat2 - lat1);
-    const dLon = this.deg2rad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-  
-  deg2rad(deg) {
-    return deg * (Math.PI / 180);
-  }
-  
-  // 查找圓形範圍內的站點（可以從 Circle 類移植過來）
+  // 查找圓形範圍內的站點
   findStationsInRadius(stations, center, radius) {
-    return stations.filter(station => {
-      try {
-        const stationLng = parseFloat(station.lng || station.longitude);
-        const stationLat = parseFloat(station.lat || station.latitude);
-        
-        if (isNaN(stationLng) || isNaN(stationLat)) {
-          return false;
-        }
-        
-        const distance = this.calculateDistance(
-          center[1], center[0],
-          stationLat, stationLng
-        );
-        
-        return distance <= radius;
-      } catch (error) {
-        console.error('處理站點時出錯:', error);
-        return false;
-      }
-    });
+    return GeoUtils.findStationsInRadius(stations, center, radius);
+  }
+  
+  // 格式化時間顯示 (秒 -> 分:秒)
+  formatTime(seconds) {
+    return GeoUtils.formatTime(seconds);
+  }
+  
+  // 格式化距離 (米 -> 公里)
+  formatDistance(meters) {
+    return GeoUtils.formatDistance(meters);
   }
 
   // 重置導航
@@ -567,18 +541,6 @@ class NavigationService {
     
     // 觸發事件
     this._triggerEvent('reset');
-  }
-
-  // 格式化時間顯示 (秒 -> 分:秒)
-  formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.round(seconds % 60);
-    return `${minutes} 分 ${remainingSeconds} 秒`;
-  }
-  
-  // 格式化距離 (米 -> 公里)
-  formatDistance(meters) {
-    return `${(meters / 1000).toFixed(2)} 公里`;
   }
 
   // 清理資源
