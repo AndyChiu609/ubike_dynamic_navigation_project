@@ -151,10 +151,12 @@ export default {
       emit('points-change', parseInt(pointsToInsert.value));
     };
     
-    // 更新路線資訊
+    // 更新路線資訊 - 使用 GeoUtils 進行格式化
     const updateRouteInfo = (distance, duration) => {
       routeCalculated.value = true;
+      // 使用 GeoUtils 進行距離格式化
       distanceInfo.value = `總距離: ${GeoUtils.formatDistance(distance)}`;
+      // 使用 GeoUtils 進行時間格式化
       timeInfo.value = `預計時間: ${GeoUtils.formatTime(duration)}`;
     };
     
@@ -170,9 +172,11 @@ export default {
       }
     };
     
-    // 更新剩餘信息
+    // 更新剩餘信息 - 使用 GeoUtils 進行格式化
     const updateRemainingInfo = (remainingDistance, remainingTime) => {
+      // 使用 GeoUtils 進行距離格式化
       distanceInfo.value = `剩餘距離: ${GeoUtils.formatDistance(remainingDistance)}`;
+      // 使用 GeoUtils 進行時間格式化
       timeInfo.value = `剩餘時間: ${GeoUtils.formatTime(remainingTime)}`;
     };
     
@@ -199,5 +203,3 @@ export default {
   }
 }
 </script>
-
-<!-- 無需獨立樣式區，已移至主樣式表 -->
