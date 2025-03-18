@@ -101,17 +101,16 @@ export default {
     
     // 切換導航模式
     const toggleNavigation = () => {
-      active.value = !active.value;
-      status.value = active.value ? '請選擇起點' : '';
-      if (!active.value) {
-        // 重置狀態
-        routeCalculated.value = false;
-        simulationActive.value = false;
-        simulationPaused.value = false;
-        distanceInfo.value = '';
-        timeInfo.value = '';
+      // 如果當前處於激活狀態，則調用退出導航
+      if (active.value) {
+        exitNavigation();
+        return;
       }
-      emit('navigation-toggle', active.value);
+      
+      // 進入導航模式
+      active.value = true;
+      status.value = '請選擇起點';
+      emit('navigation-toggle', true);
     };
     
     // 退出導航

@@ -77,7 +77,10 @@ export default {
         
         // 重置導航狀態
         navigationService.reset();
-      } 
+      } else {
+        // 退出導航模式 - 確保正確處理退出
+        handleNavigationExit();
+      }
     };
     
     // 處理退出導航
@@ -90,11 +93,6 @@ export default {
       // 清除導航過程中的站點標記
       viewportManager.clearNavigationStationMarkers();
       
-      // 返回地圖初始狀態
-      if (mapInstance.value) {
-        mapInstance.value.setCenter([121.5654, 25.0330]);
-        mapInstance.value.setZoom(12);
-      }
     };
     
     // 開始模擬

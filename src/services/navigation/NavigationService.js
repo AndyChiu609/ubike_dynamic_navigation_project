@@ -286,19 +286,6 @@ class NavigationService {
     
     this.currentPositionMarker.addTo(this.mapInstance);
     
-    // 計算路線的邊界框，以確保整個路線在視圖中
-    const bounds = new mapboxgl.LngLatBounds();
-    
-    // 將起點和終點添加到邊界框
-    bounds.extend(this.startPoint);
-    bounds.extend(this.endPoint);
-    
-    // 先飛到可以看到整個路線的視圖
-    this.mapInstance.getMapInstance().fitBounds(bounds, {
-      padding: 100, // 在邊界外添加一些填充
-      duration: 1000
-    });
-    
     // 添加地圖移動結束事件監聽
     const mapInstance = this.mapInstance.getMapInstance();
     
@@ -315,20 +302,19 @@ class NavigationService {
     // 添加監聽器
     mapInstance.on('moveend', this._moveEndListener);
     
-    // 等待視圖調整完成後，再飛到起點位置並放大
-    setTimeout(() => {
-      this.mapInstance.getMapInstance().flyTo({
-        center: startPosition,
-        zoom: 16,
-        duration: 1000
-      });
-      
-      // 啟動模擬移動
-      setTimeout(() => {
-        this.simulationInterval = setInterval(() => this.updateSimulation(), this.simulationSpeed);
-        this._triggerEvent('simulationStarted');
-      }, 1200);
-    }, 1500);
+    // 直接飛到起點位置並放大
+    this.mapInstance.getMapInstance().flyTo({
+      center: startPosition,
+      zoom: 16,
+      duration: 1000
+    });
+    
+    // 啟動模擬移動 (稍微延遲以等待地圖飛行完成)
+    // 儲存計時器ID以便於清理
+    this._startTimeoutId = setTimeout(() => {
+      this.simulationInterval = setInterval(() => this.updateSimulation(), this.simulationSpeed);
+      this._triggerEvent('simulationStarted');
+    }, 1200);
     
     return true;
   }
@@ -400,9 +386,16 @@ class NavigationService {
     this.simulationActive = false;
     this.simulationPaused = false;
     
+    // 清除所有可能的計時器/間隔
     if (this.simulationInterval) {
       clearInterval(this.simulationInterval);
       this.simulationInterval = null;
+    }
+    
+    // 清除任何可能的setTimeout
+    if (this._startTimeoutId) {
+      clearTimeout(this._startTimeoutId);
+      this._startTimeoutId = null;
     }
     
     if (this.currentPositionMarker) {
